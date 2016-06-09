@@ -25,6 +25,7 @@ class HTTPIOFile(object):
         self.block_size = block_size
         self.closed = False
 
+        self._kwargs = kwargs
         self._cursor = 0
         self._cache = {}
         self._session = requests.Session()
@@ -120,7 +121,11 @@ class HTTPIOFile(object):
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
-        return self._session.get(self.url, headers=headers).content
+        response =  self._session.get(
+            self.url,
+            headers=headers,
+            **self._kwargs)
+        return response.content
 
     def _assert_open(self):
         if self.closed:
