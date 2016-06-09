@@ -1,5 +1,7 @@
-httpio: HTTP resources as random-access file-like objects
-=========================================================
+httpio
+======
+
+HTTP resources as random-access file-like objects.
 
 httpio is a small Python library that allows you to access files served over
 HTTP as file-like_ objects. It differs from libraries like `urllib` and
