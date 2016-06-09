@@ -1,14 +1,14 @@
 httpio
 ======
 
-HTTP resources as random-access file-like objects.
+HTTP resources as random-access file-like objects
 
 httpio is a small Python library that allows you to access files served over
-HTTP as file-like_ objects. It differs from libraries like `urllib` and
-`requests` in that it supports `seek()` (which moves an internal pointer),
-and that `read()` makes a request with the `Range` header set. It also supports
-caching of contents using a configurable block size, and will reuse TCP
-connections where possible.
+HTTP as file-like_ objects. It differs from libraries like ``urllib`` and
+``requests`` in that it supports ``seek()`` (which moves an internal pointer),
+and that ``read()`` makes a request with the ``Range`` header set. It also
+supports caching of contents using a configurable block size, and will reuse
+TCP connections where possible.
 
 Installation
 ------------
