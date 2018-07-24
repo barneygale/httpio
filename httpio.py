@@ -94,7 +94,7 @@ class HTTPIOFile(object):
             data = []
             for idx in range(sector0, sector1):
                 start = offset0 if idx == sector0 else None
-                end   = offset1 if idx == sector1 else None
+                end = offset1 if idx == sector1 else None
                 data.append(self._cache[idx][start:end])
 
             data = "".join(data)
@@ -121,7 +121,7 @@ class HTTPIOFile(object):
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
-        response =  self._session.get(
+        response = self._session.get(
             self.url,
             headers=headers,
             **self._kwargs)
