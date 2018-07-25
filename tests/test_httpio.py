@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import unittest
 from unittest import TestCase
 
-from httpio import HTTPIOFile
+from httpio import HTTPIOFile, HTTPIOError
 from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
@@ -33,6 +33,10 @@ ASCII_DATA = b''.join(line.encode('ascii') for line in ASCII_LINES)
 IOBaseError = OSError if PY3 else IOError
 
 
+class HTTPException(Exception):
+    pass
+
+
 class TestHTTPIOFile(TestCase):
     def setUp(self):
         self.patchers = {}
@@ -46,12 +50,19 @@ class TestHTTPIOFile(TestCase):
         self.session = self.mocks['Session'].return_value
 
         self.data_source = DATA
+        self.error_code = None
 
         def _head(url, **kwargs):
-            return mock.MagicMock(headers={'Content-Length':
-                                           len(self.data_source),
-                                           'Accept-Ranges':
-                                           'bytes'})
+            if self.error_code is None:
+                return mock.MagicMock(status_code=204,
+                                      headers={'Content-Length':
+                                               len(self.data_source),
+                                               'Accept-Ranges':
+                                               'bytes'})
+            else:
+                return mock.MagicMock(status_code=self.error_code,
+                                      raise_for_status=mock.MagicMock(
+                                          side_effect=HTTPException))
 
         self.session.head.side_effect = _head
 
@@ -65,13 +76,24 @@ class TestHTTPIOFile(TestCase):
                         start = int(m.group(1))
                         end = int(m.group(2)) + 1
 
-            return mock.MagicMock(content=self.data_source[start:end])
+            if self.error_code is not None:
+                return mock.MagicMock(status_code=self.error_code,
+                                      raise_for_status=mock.MagicMock(
+                                          side_effect=HTTPException))
+            else:
+                return mock.MagicMock(status_code=200,
+                                      content=self.data_source[start:end])
 
         self.session.get.side_effect = _get
 
     def tearDown(self):
         for key in self.patchers:
             self.mocks[key] = self.patchers[key].stop()
+
+    def test_throws_exception_when_head_returns_error(self):
+        self.error_code = 404
+        with self.assertRaises(HTTPException):
+            HTTPIOFile('http://www.example.com/test/', 1024)
 
     def test_implements_buffered_io_base(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
@@ -128,6 +150,13 @@ class TestHTTPIOFile(TestCase):
     def test_read_gets_data_without_buffering(self):
         with HTTPIOFile('http://www.example.com/test/') as io:
             self.assertEqual(io.read(), DATA)
+
+    def test_throws_exception_when_get_returns_error(self):
+        with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.error_code = 404
+            with self.assertRaises(HTTPException):
+                io.read(1024)
+            self.assertEqual(io.tell(), 0)
 
     def test_read1(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:

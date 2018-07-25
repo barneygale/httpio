@@ -222,6 +222,7 @@ class HTTPIOFile(BufferedIOBase):
             self.url,
             headers=headers,
             **self._kwargs)
+        response.raise_for_status()
         return response.content
 
     def _assert_open(self):
