@@ -3,12 +3,14 @@ httpio
 
 HTTP resources as random-access file-like objects
 
-httpio is a small Python library that allows you to access files served over
-HTTP as file-like_ objects. It differs from libraries like ``urllib`` and
-``requests`` in that it supports ``seek()`` (which moves an internal pointer),
-and that ``read()`` makes a request with the ``Range`` header set. It also
-supports caching of contents using a configurable block size, and will reuse
-TCP connections where possible.
+httpio is a small Python library that allows you to access files
+served over HTTP as file-like_ objects (which is to say that they
+support the interface of the standard library's BufferedIOBase_
+class). It differs from libraries like ``urllib`` and ``requests`` in
+that it supports ``seek()`` (which moves an internal pointer), and
+that ``read()`` makes a request with the ``Range`` header set. It also
+supports caching of contents using a configurable block size, and will
+reuse TCP connections where possible.
 
 Installation
 ------------
@@ -32,10 +34,12 @@ Usage
         zf = zipfile.ZipFile(fp)
         print(zf.namelist())
 
-.. _file-like: https://docs.python.org/2/library/stdtypes.html#bltin-file-objects
+.. _file-like: https://docs.python.org/3/glossary.html#term-file-object
+
+.. _BufferedIOBase: https://docs.python.org/3/library/io.html#io.BufferedIOBase
 
 Unit Tests
---------
+----------
 
 Unit tests are provided for the standard behaviours implemented by
 the library. They can be run with
