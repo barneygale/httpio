@@ -113,6 +113,13 @@ class TestHTTPIOFile(TestCase):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertFalse(io.isatty())
 
+    def test_peek(self):
+        with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            io.seek(1500)
+            data = io.peek(1024)
+            self.assertEqual(data, DATA[1500:1500 + 1024])
+            self.assertEqual(io.tell(), 1500)
+
     def test_read_gets_data(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             data = io.read(1024)

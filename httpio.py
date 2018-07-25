@@ -56,12 +56,6 @@ class HTTPIOFile(BufferedIOBase):
         status = "closed" if self.closed else "open"
         return "<%s HTTPIOFile %r at %s>" % (status, self.url, hex(id(self)))
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
     def close(self):
         if not self.closed:
             self._session.close()
@@ -71,6 +65,13 @@ class HTTPIOFile(BufferedIOBase):
     def flush(self):
         self._assert_open()
         self._cache.clear()
+
+    def peek(self, size=-1):
+        loc = self.tell()
+        data = self.read1(size)
+        self.seek(loc)
+
+        return data
 
     def read(self, size=-1):
         self._assert_open()
