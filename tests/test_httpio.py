@@ -5,7 +5,8 @@ import unittest
 from unittest import TestCase
 
 from httpio import HTTPIOFile
-from io import IOBase, SEEK_CUR, SEEK_END
+from io import BufferedIOBase, UnsupportedOperation
+from io import SEEK_CUR, SEEK_END
 
 import mock
 import random
@@ -42,7 +43,7 @@ class TestHTTPIOFile(TestCase):
             self.mocks[key] = self.patchers[key].start()
 
         # Set up the dummy HTTP requests interface:
-        _session = self.mocks['Session'].return_value
+        self.session = self.mocks['Session'].return_value
 
         self.data_source = DATA
 
@@ -52,7 +53,7 @@ class TestHTTPIOFile(TestCase):
                                            'Accept-Ranges':
                                            'bytes'})
 
-        _session.head.side_effect = _head
+        self.session.head.side_effect = _head
 
         def _get(url, **kwargs):
             (start, end) = (None, None)
@@ -66,15 +67,15 @@ class TestHTTPIOFile(TestCase):
 
             return mock.MagicMock(content=self.data_source[start:end])
 
-        _session.get.side_effect = _get
+        self.session.get.side_effect = _get
 
     def tearDown(self):
         for key in self.patchers:
             self.mocks[key] = self.patchers[key].stop()
 
-    def test_implements_io_base(self):
+    def test_implements_buffered_io_base(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
-            self.assertIsInstance(io, IOBase)
+            self.assertIsInstance(io, BufferedIOBase)
 
     def test_read_after_close_fails(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
@@ -87,6 +88,11 @@ class TestHTTPIOFile(TestCase):
             self.assertTrue(hasattr(io, 'closed'))
             self.assertFalse(io.closed)
         self.assertTrue(io.closed)
+
+    def test_detach(self):
+        with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            with self.assertRaises(UnsupportedOperation):
+                io.detach()
 
     def test_fileno(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
@@ -116,6 +122,25 @@ class TestHTTPIOFile(TestCase):
         with HTTPIOFile('http://www.example.com/test/') as io:
             self.assertEqual(io.read(), DATA)
 
+    def test_read1(self):
+        with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            io.seek(1024)
+            io.read(1024)
+            io.seek(0)
+
+            self.session.reset_mock()
+            data = io.read1()
+            self.session.get.assert_called_once()
+
+            self.assertEqual(data, DATA[:2048])
+            io.seek(1536)
+
+            self.session.reset_mock()
+            data = io.read1()
+            self.session.get.assert_called_once()
+
+            self.assertEqual(data, DATA[1536:])
+
     def test_readable(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertTrue(io.readable())
@@ -125,6 +150,26 @@ class TestHTTPIOFile(TestCase):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual(io.readinto(b), len(b))
             self.assertEqual(bytes(b), DATA[:1536])
+
+    def test_readinto1(self):
+        b = bytearray(len(DATA))
+        with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            io.seek(1024)
+            io.read(1024)
+            io.seek(0)
+
+            self.session.reset_mock()
+            self.assertEqual(io.readinto1(b), 2048)
+            self.session.get.assert_called_once()
+
+            self.assertEqual(b[:2048], DATA[:2048])
+            io.seek(1536)
+
+            self.session.reset_mock()
+            self.assertEqual(io.readinto1(b), len(DATA) - 1536)
+            self.session.get.assert_called_once()
+
+            self.assertEqual(b[:len(DATA) - 1536], DATA[1536:])
 
     def test_readline(self):
         self.data_source = ASCII_DATA

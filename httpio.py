@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import re
 import requests
 
-from io import IOBase
+from io import BufferedIOBase
 
 from six import PY3
 
@@ -32,7 +32,7 @@ class HTTPIOError(IOBaseError):
     pass
 
 
-class HTTPIOFile(IOBase):
+class HTTPIOFile(BufferedIOBase):
     def __init__(self, url, block_size=-1, **kwargs):
         super(HTTPIOFile, self).__init__()
         self.url = url
@@ -81,10 +81,35 @@ class HTTPIOFile(IOBase):
         if size == 0:
             return b""
 
-        b = bytearray(size)
-        self.readinto(b)
+        if self.block_size <= 0:
+            data = self._read_raw(self._cursor, self._cursor + size)
 
-        return bytes(b)
+        else:
+            data = b''.join(self._read_cached(size))
+
+        self._cursor += len(data)
+        return data
+
+    def read1(self, size=-1):
+        self._assert_open()
+
+        if size < 1 or self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return b""
+
+        if self.block_size <= 0:
+            data = self._read_raw(self._cursor, self._cursor + size)
+
+        else:
+            data = b''.join(self._read_cached(size, max_raw_reads=1))
+
+        self._cursor += len(data)
+        return data
+
+    def readable(self):
+        return True
 
     def readinto(self, b):
         self._assert_open()
@@ -98,43 +123,38 @@ class HTTPIOFile(IOBase):
             return 0
 
         if self.block_size <= 0:
-            b[:] = self._read_raw(self._cursor, self._cursor + size)
+            b[:size] = self._read_raw(self._cursor, self._cursor + size)
 
         else:
-            sector0, offset0 = divmod(self._cursor, self.block_size)
-            sector1, offset1 = divmod(self._cursor + size - 1, self.block_size)
-            offset1 += 1
-            sector1 += 1
-
-            # Fetch any sectors missing from the cache
-            status = "".join(str(int(idx in self._cache))
-                             for idx in range(sector0, sector1))
-            for match in re.finditer("0+", status):
-                data = self._read_raw(
-                    self.block_size * (sector0 + match.start()),
-                    self.block_size * (sector0 + match.end()))
-
-                for idx in range(match.end() - match.start()):
-                    self._cache[sector0 + idx + match.start()] = data[
-                        self.block_size * idx:
-                        self.block_size * (idx + 1)]
-
-            data = []
-            for idx in range(sector0, sector1):
-                start = offset0 if idx == sector0 else None
-                end = offset1 if idx == (sector1 - 1) else None
-                data.append(self._cache[idx][start:end])
-
             n = 0
-            for datum in data:
-                b[n:n+len(datum)] = datum
-                n += len(datum)
+            for sector in self._read_cached(size):
+                b[n:n+len(sector)] = sector
+                n += len(sector)
 
-        self._cursor += size
         return size
 
-    def readable(self):
-        return True
+    def readinto1(self, b):
+        self._assert_open()
+
+        size = len(b)
+
+        if self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return 0
+
+        if self.block_size <= 0:
+            b[:size] = self._read_raw(self._cursor, self._cursor + size)
+
+        else:
+            n = 0
+            for sector in self._read_cached(size, max_raw_reads=1):
+                b[n:n+len(sector)] = sector
+                n += len(sector)
+            size = n
+
+        return size
 
     def seek(self, offset, whence=0):
         self._assert_open()
@@ -159,6 +179,41 @@ class HTTPIOFile(IOBase):
 
     def write(self, *args, **kwargs):
         raise HTTPIOError("Writing not supported on http resource")
+
+    def _read_cached(self, size, max_raw_reads=-1):
+        sector0, offset0 = divmod(self._cursor, self.block_size)
+        sector1, offset1 = divmod(self._cursor + size - 1, self.block_size)
+        offset1 += 1
+        sector1 += 1
+
+        # Fetch any sectors missing from the cache
+        status = "".join(str(int(idx in self._cache))
+                         for idx in range(sector0, sector1))
+        raw_reads = 0
+        for match in re.finditer("0+", status):
+            if max_raw_reads >= 0 and raw_reads >= max_raw_reads:
+                break
+
+            data = self._read_raw(
+                self.block_size * (sector0 + match.start()),
+                self.block_size * (sector0 + match.end()))
+            raw_reads += 1
+
+            for idx in range(match.end() - match.start()):
+                self._cache[sector0 + idx + match.start()] = data[
+                    self.block_size * idx:
+                    self.block_size * (idx + 1)]
+
+        data = []
+        for idx in range(sector0, sector1):
+            if idx not in self._cache:
+                break
+
+            start = offset0 if idx == sector0 else None
+            end = offset1 if idx == (sector1 - 1) else None
+            data.append(self._cache[idx][start:end])
+
+        return data
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
