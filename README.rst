@@ -33,3 +33,18 @@ Usage
         print(zf.namelist())
 
 .. _file-like: https://docs.python.org/2/library/stdtypes.html#bltin-file-objects
+
+Unit Tests
+--------
+
+Unit tests are provided for the standard behaviours implemented by
+the library. They can be run with
+
+.. code-block:: bash
+    python -m unittest discover -s tests
+
+or a ``tox.ini`` file is provided which allows the tests to be run in
+virtual environments using the ``tox`` tool:
+
+.. code-block:: bash
+    tox
