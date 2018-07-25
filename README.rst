@@ -40,11 +40,13 @@ Unit Tests
 Unit tests are provided for the standard behaviours implemented by
 the library. They can be run with
 
-.. code-block:: bash
-    python -m unittest discover -s tests
+.. code-block:: console
+    
+    $ python -m unittest discover -s tests
 
 or a ``tox.ini`` file is provided which allows the tests to be run in
 virtual environments using the ``tox`` tool:
 
-.. code-block:: bash
-    tox
+.. code-block:: console
+    
+    $ tox
