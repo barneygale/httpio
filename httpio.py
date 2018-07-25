@@ -1,5 +1,18 @@
+from __future__ import print_function
+from __future__ import absolute_import
+
 import re
 import requests
+
+from io import IOBase
+
+from six import PY3
+
+__all__ = ["open", "HTTPIOError", "HTTPIOFile"]
+
+
+# The expected exception from unimplemented IOBase operations
+IOBaseError = OSError if PY3 else IOError
 
 
 def open(url, block_size=-1, **kwargs):
@@ -15,15 +28,15 @@ def open(url, block_size=-1, **kwargs):
     return HTTPIOFile(url, block_size, **kwargs)
 
 
-class HTTPIOError(Exception):
+class HTTPIOError(IOBaseError):
     pass
 
 
-class HTTPIOFile(object):
+class HTTPIOFile(IOBase):
     def __init__(self, url, block_size=-1, **kwargs):
+        super(HTTPIOFile, self).__init__()
         self.url = url
         self.block_size = block_size
-        self.closed = False
 
         self._kwargs = kwargs
         self._cursor = 0
@@ -53,7 +66,7 @@ class HTTPIOFile(object):
         if not self.closed:
             self._session.close()
             self._cache.clear()
-            self.closed = True
+        super(HTTPIOFile, self).close()
 
     def flush(self):
         self._assert_open()
@@ -68,8 +81,24 @@ class HTTPIOFile(object):
         if size == 0:
             return b""
 
+        b = bytearray(size)
+        self.readinto(b)
+
+        return bytes(b)
+
+    def readinto(self, b):
+        self._assert_open()
+
+        size = len(b)
+
+        if self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return 0
+
         if self.block_size <= 0:
-            data = self._read_raw(self._cursor, self._cursor + size)
+            b[:] = self._read_raw(self._cursor, self._cursor + size)
 
         else:
             sector0, offset0 = divmod(self._cursor, self.block_size)
@@ -96,10 +125,16 @@ class HTTPIOFile(object):
                 end = offset1 if idx == (sector1 - 1) else None
                 data.append(self._cache[idx][start:end])
 
-            data = b"".join(data)
+            n = 0
+            for datum in data:
+                b[n:n+len(datum)] = datum
+                n += len(datum)
 
         self._cursor += size
-        return data
+        return size
+
+    def readable(self):
+        return True
 
     def seek(self, offset, whence=0):
         self._assert_open()
@@ -113,10 +148,17 @@ class HTTPIOFile(object):
             raise HTTPIOError("Invalid argument: whence=%r" % whence)
         if not (0 <= self._cursor <= self.length):
             raise HTTPIOError("Invalid argument: cursor=%r" % self._cursor)
+        return self._cursor
+
+    def seekable(self):
+        return True
 
     def tell(self):
         self._assert_open()
         return self._cursor
+
+    def write(self, *args, **kwargs):
+        raise HTTPIOError("Writing not supported on http resource")
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
