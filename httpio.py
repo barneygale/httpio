@@ -66,7 +66,7 @@ class HTTPIOFile(object):
             size = self.length - self._cursor
 
         if size == 0:
-            return ""
+            return b""
 
         if self.block_size <= 0:
             data = self._read_raw(self._cursor, self._cursor + size)
@@ -74,9 +74,8 @@ class HTTPIOFile(object):
         else:
             sector0, offset0 = divmod(self._cursor, self.block_size)
             sector1, offset1 = divmod(self._cursor + size - 1, self.block_size)
-            sector1 += 1
             offset1 += 1
-            self._cursor += size
+            sector1 += 1
 
             # Fetch any sectors missing from the cache
             status = "".join(str(int(idx in self._cache))
@@ -94,10 +93,10 @@ class HTTPIOFile(object):
             data = []
             for idx in range(sector0, sector1):
                 start = offset0 if idx == sector0 else None
-                end   = offset1 if idx == sector1 else None
+                end = offset1 if idx == (sector1 - 1) else None
                 data.append(self._cache[idx][start:end])
 
-            data = "".join(data)
+            data = b"".join(data)
 
         self._cursor += size
         return data
@@ -121,7 +120,7 @@ class HTTPIOFile(object):
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
-        response =  self._session.get(
+        response = self._session.get(
             self.url,
             headers=headers,
             **self._kwargs)

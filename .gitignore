@@ -3,3 +3,6 @@
 MANIFEST
 dist
 build
+__pycache__
+.tox
+httpio.egg-info
