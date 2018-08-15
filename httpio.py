@@ -1,4 +1,3 @@
-from __future__ import print_function
 from __future__ import absolute_import
 
 import re
@@ -74,88 +73,19 @@ class HTTPIOFile(BufferedIOBase):
         return data
 
     def read(self, size=-1):
-        self._assert_open()
-
-        if size < 1 or self._cursor + size > self.length:
-            size = self.length - self._cursor
-
-        if size == 0:
-            return b""
-
-        if self.block_size <= 0:
-            data = self._read_raw(self._cursor, self._cursor + size)
-
-        else:
-            data = b''.join(self._read_cached(size))
-
-        self._cursor += len(data)
-        return data
+        return self._read_impl(size)
 
     def read1(self, size=-1):
-        self._assert_open()
-
-        if size < 1 or self._cursor + size > self.length:
-            size = self.length - self._cursor
-
-        if size == 0:
-            return b""
-
-        if self.block_size <= 0:
-            data = self._read_raw(self._cursor, self._cursor + size)
-
-        else:
-            data = b''.join(self._read_cached(size, max_raw_reads=1))
-
-        self._cursor += len(data)
-        return data
+        return self._read_impl(size, 1)
 
     def readable(self):
         return True
 
     def readinto(self, b):
-        self._assert_open()
-
-        size = len(b)
-
-        if self._cursor + size > self.length:
-            size = self.length - self._cursor
-
-        if size == 0:
-            return 0
-
-        if self.block_size <= 0:
-            b[:size] = self._read_raw(self._cursor, self._cursor + size)
-
-        else:
-            n = 0
-            for sector in self._read_cached(size):
-                b[n:n+len(sector)] = sector
-                n += len(sector)
-
-        return size
+        return self._readinto_impl(b)
 
     def readinto1(self, b):
-        self._assert_open()
-
-        size = len(b)
-
-        if self._cursor + size > self.length:
-            size = self.length - self._cursor
-
-        if size == 0:
-            return 0
-
-        if self.block_size <= 0:
-            b[:size] = self._read_raw(self._cursor, self._cursor + size)
-
-        else:
-            n = 0
-            for sector in self._read_cached(size, max_raw_reads=1):
-                b[n:n+len(sector)] = sector
-                n += len(sector)
-            size = n
-
-        return size
+        return self._readinto_impl(b, 1)
 
     def seek(self, offset, whence=0):
         self._assert_open()
@@ -180,6 +110,49 @@ class HTTPIOFile(BufferedIOBase):
 
     def write(self, *args, **kwargs):
         raise HTTPIOError("Writing not supported on http resource")
+
+    def _read_impl(self, size=-1, max_raw_reads=-1):
+        self._assert_open()
+
+        if size < 1 or self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return b""
+
+        if self.block_size <= 0:
+            data = self._read_raw(self._cursor, self._cursor + size)
+
+        else:
+            data = b''.join(self._read_cached(size,
+                                              max_raw_reads=max_raw_reads))
+
+        self._cursor += len(data)
+        return data
+
+    def _readinto_impl(self, b, max_raw_reads=-1):
+        self._assert_open()
+
+        size = len(b)
+
+        if self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return 0
+
+        if self.block_size <= 0:
+            b[:size] = self._read_raw(self._cursor, self._cursor + size)
+            return size
+
+        else:
+            n = 0
+            for sector in self._read_cached(size,
+                                            max_raw_reads=max_raw_reads):
+                b[n:n+len(sector)] = sector
+                n += len(sector)
+
+            return n
 
     def _read_cached(self, size, max_raw_reads=-1):
         sector0, offset0 = divmod(self._cursor, self.block_size)

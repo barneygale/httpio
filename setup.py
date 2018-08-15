@@ -10,5 +10,8 @@ setup(
     description='HTTP resources as random-access file-like objects',
     long_description=open('README.rst').read(),
     py_modules=['httpio'],
-    install_requires=['requests >= 2.10.0'],
+    install_requires=[
+        'requests >= 2.10.0',
+        'six'
+    ],
 )
