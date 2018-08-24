@@ -191,10 +191,12 @@ class HTTPIOFile(BufferedIOBase):
 
     def _read_raw(self, start, end):
         headers = {"Range": "bytes=%d-%d" % (start, end - 1)}
+        headers.update(self._kwargs.get("headers", {}))
+        kwargs = dict(self._kwargs)
+        kwargs['headers'] = headers
         response = self._session.get(
             self.url,
-            headers=headers,
-            **self._kwargs)
+            **kwargs)
         response.raise_for_status()
         return response.content
 
