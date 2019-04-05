@@ -7,7 +7,10 @@ from io import BufferedIOBase
 
 from six import PY3
 
-__all__ = ["open", "HTTPIOError", "HTTPIOFile"]
+if PY3:
+    __all__ = ["open", "HTTPIOError", "HTTPIOFile"]
+else:
+    __all__ = ["open", "HTTPIOError", "HTTPIOFile"]
 
 
 # The expected exception from unimplemented IOBase operations
