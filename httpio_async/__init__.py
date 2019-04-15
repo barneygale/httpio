@@ -4,6 +4,10 @@ The interface is where possible as similar to the existing httpio interface as p
 file like objects of python) except that many methods are replaced with asynchronous coroutines."""
 
 import aiohttp
+from httpio import HTTPIOError
+
+
+__all__ = ["AsyncHTTPIOFile", "HTTPIOError", "open"]
 
 
 async def open(url, block_size=-1, **kwargs):
@@ -54,6 +58,7 @@ class AsyncHTTPIOFile(object):
         if self.closed:
             self._session = await aiohttp.ClientSession().__aenter__()
             async with self._session.head(self.url, **self._kwargs) as response:
+                response.raise_for_status()
                 self.length = int(response.headers.get('content-length', None))
                 self.closed = False
 
@@ -74,6 +79,9 @@ class AsyncHTTPIOFile(object):
     async def flush(self):
         self._cache.clear()
 
+    async def peek(self, size):
+        return await self._read_impl(size, peek=True)
+
     async def read(self, size=-1):
         return await self._read_impl(size)
 
@@ -88,6 +96,61 @@ class AsyncHTTPIOFile(object):
 
     async def readinto1(self, b):
         return await self._readinto_impl(b, 1)
+
+    async def readline(self, size=-1):
+        self._assert_open()
+
+        if size < 1 or self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            return b""
+
+        if self.block_size <= 0:
+            data = await self._read_raw(self._cursor, self._cursor + size)
+
+        else:
+            data = b''
+            while len(data) < size:
+                async for sector in self._read_cached(size,
+                                                      max_raw_reads=1):
+                    data += sector
+                    if b'\n' in sector:
+                        break
+                if b'\n' in sector:
+                        break
+
+        data = data.splitlines(True)[0]
+        self._cursor += len(data)
+        return data
+
+    async def readlines(self, size=-1):
+        self._assert_open()
+
+        if size < 1 or self._cursor + size > self.length:
+            size = self.length - self._cursor
+
+        if size == 0:
+            yield b""
+        else:
+            if self.block_size <= 0:
+                data = await self._read_raw(self._cursor, self._cursor + size)
+                for line in data.splitlines(True):
+                    yield line
+            else:
+                data = b''
+                while len(data) < size:
+                    async for sector in self._read_cached(size,
+                                                          max_raw_reads=1):
+                        for line in sector.splitlines(True):
+                            data += line
+                            if data.endswith(b'\n'):
+                                yield data
+                                size -= len(data)
+                                self._cursor += len(data)
+                                data = b''
+                self._cursor += len(data)
+                yield data
 
     async def seek(self, offset, whence=0):
         self._assert_open()
@@ -113,7 +176,7 @@ class AsyncHTTPIOFile(object):
     async def write(self, *args, **kwargs):
         raise HTTPIOError("Writing not supported on http resource")
 
-    async def _read_impl(self, size=-1, max_raw_reads=-1):
+    async def _read_impl(self, size=-1, max_raw_reads=-1, peek=False):
         self._assert_open()
 
         if size < 1 or self._cursor + size > self.length:
@@ -131,7 +194,8 @@ class AsyncHTTPIOFile(object):
                                                   max_raw_reads=max_raw_reads):
                 data += sector
 
-        self._cursor += len(data)
+        if not peek:
+            self._cursor += len(data)
         return data
 
     async def _readinto_impl(self, b, max_raw_reads=-1):
@@ -169,6 +233,9 @@ class AsyncHTTPIOFile(object):
         data = []
         for idx in range(sector0, sector1):
             if idx not in self._cache:
+                if max_raw_reads == raw_reads:
+                    break
+
                 end = idx + 1
                 while end < sector1 and end not in self._cache:
                     end += 1

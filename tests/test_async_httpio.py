@@ -34,6 +34,10 @@ ASCII_DATA = b''.join(line.encode('ascii') for line in ASCII_LINES)
 IOBaseError = OSError
 
 
+class HTTPException(Exception):
+    pass
+
+
 class AsyncContextManagerMock(mock.MagicMock):
     def __init__(self, *args, **kwargs):
         super(AsyncContextManagerMock, self).__init__(*args, **kwargs)
@@ -61,9 +65,9 @@ class TestAsyncHTTPIOFile(TestCase):
         for key in self.patchers:
             self.mocks[key] = self.patchers[key].start()
 
-        session = AsyncContextManagerMock()
-        self.mocks['ClientSession'].return_value = session
-        session.async_context_object = session
+        self.session = AsyncContextManagerMock()
+        self.mocks['ClientSession'].return_value = self.session
+        self.session.async_context_object = self.session
 
         self.data_source = DATA
         self.error_code = None
@@ -81,7 +85,7 @@ class TestAsyncHTTPIOFile(TestCase):
                 m.async_context_object.raise_for_status = mock.MagicMock(side_effect=HTTPException)
             return m
 
-        session.head.side_effect = _head
+        self.session.head.side_effect = _head
 
         def _get(*args, **kwargs):
             (start, end) = (None, None)
@@ -104,11 +108,51 @@ class TestAsyncHTTPIOFile(TestCase):
                     async_context_object=mock.MagicMock(
                         status_code = self.error_code,
                         raise_for_status = mock.MagicMock(side_effect=HTTPException)))
-        session.get.side_effect = _get
+        self.session.get.side_effect = _get
 
     def tearDown(self):
         for key in self.patchers:
             self.mocks[key] = self.patchers[key].stop()
+
+    @async_test
+    async def test_throws_exception_when_head_returns_error(self):
+        self.error_code = 404
+        with self.assertRaises(HTTPException):
+            async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+                pass
+
+    @async_test
+    async def test_read_after_close_fails(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            pass
+        with self.assertRaises(IOBaseError):
+            await io.read()
+
+    @async_test
+    async def test_closed(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertTrue(hasattr(io, 'closed'))
+            self.assertFalse(io.closed)
+        self.assertTrue(io.closed)
+
+    @async_test
+    async def test_flush_dumps_cache(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual(await io.read(1024), DATA[:1024])
+            self.data_source = OTHER_DATA
+            await io.seek(0)
+            self.assertEqual(await io.read(1024), DATA[:1024])
+            await io.flush()
+            await io.seek(0)
+            self.assertEqual(await io.read(1024), OTHER_DATA[:1024])
+
+    @async_test
+    async def test_peek(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            await io.seek(1500)
+            data = await io.peek(1024)
+            self.assertEqual(data, DATA[1500:1500 + 1024])
+            self.assertEqual(await io.tell(), 1500)
 
     @async_test
     async def test_read_gets_data(self):
@@ -123,6 +167,101 @@ class TestAsyncHTTPIOFile(TestCase):
         self.assertEqual(data, DATA[0:1024])
 
     @async_test
+    async def test_throws_exception_when_get_returns_error(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.error_code = 404
+            with self.assertRaises(HTTPException):
+                await io.read(1024)
+            self.assertEqual(await io.tell(), 0)
+
+    @async_test
+    async def test_read1(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            await io.seek(1024)
+            await io.read(1024)
+            await io.seek(0)
+
+            self.session.reset_mock()
+            data = await io.read1()
+            self.session.get.assert_called_once()
+
+            self.assertEqual(data, DATA[:2048])
+            await io.seek(1536)
+
+            self.session.reset_mock()
+            data = await io.read1()
+            self.session.get.assert_called_once()
+
+            self.assertEqual(data, DATA[1536:])
+
+    @async_test
+    async def test_readable(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertTrue(io.readable())
+
+    @async_test
+    async def test_readinto(self):
+        b = bytearray(1536)
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual(await io.readinto(b), len(b))
+            self.assertEqual(bytes(b), DATA[:1536])
+
+    @async_test
+    async def test_readinto1(self):
+        b = bytearray(len(DATA))
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            await io.seek(1024)
+            await io.read(1024)
+            await io.seek(0)
+
+            self.session.reset_mock()
+            self.assertEqual(await io.readinto1(b), 2048)
+            self.session.get.assert_called_once()
+
+            self.assertEqual(b[:2048], DATA[:2048])
+            await io.seek(1536)
+
+            self.session.reset_mock()
+            self.assertEqual(await io.readinto1(b), len(DATA) - 1536)
+            self.session.get.assert_called_once()
+
+            self.assertEqual(b[:len(DATA) - 1536], DATA[1536:])
+
+    @async_test
+    async def test_readline(self):
+        self.data_source = ASCII_DATA
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual((await io.readline()).decode('ascii'),
+                             ASCII_LINES[0])
+
+    @async_test
+    async def test_readlines(self):
+        self.data_source = ASCII_DATA
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual([line.decode('ascii') async for line in io.readlines()],
+                             [line for line in ASCII_LINES])
+
+    @async_test
+    async def test_tell_starts_at_zero(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual(await io.tell(), 0)
+
+    @async_test
+    async def test_seek_and_tell_match(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertEqual(await io.seek(1536), 1536)
+            self.assertEqual(await io.tell(), 1536)
+
+            self.assertEqual(await io.seek(10, whence=SEEK_CUR), 1546)
+            self.assertEqual(await io.tell(), 1546)
+
+            self.assertEqual(await io.seek(-20, whence=SEEK_CUR), 1526)
+            self.assertEqual(await io.tell(), 1526)
+
+            self.assertEqual(await io.seek(-20, whence=SEEK_END), len(DATA) - 20)
+            self.assertEqual(await io.tell(), len(DATA) - 20)
+
+    @async_test
     async def test_random_access(self):
         async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
             await io.seek(1536)
@@ -133,3 +272,8 @@ class TestAsyncHTTPIOFile(TestCase):
             self.assertEqual(await io.read(1024), DATA[3574:4598])
             await io.seek(-1044, whence=SEEK_END)
             self.assertEqual(await io.read(1024), DATA[-1044:-20])
+
+    @async_test
+    async def test_seekable(self):
+        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            self.assertTrue(io.seekable())
