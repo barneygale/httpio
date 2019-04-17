@@ -7,6 +7,7 @@ from httpio.async import AsyncHTTPIOFile
 import mock
 import random
 import re
+import warnings
 
 from io import SEEK_CUR, SEEK_END
 
@@ -52,7 +53,29 @@ class AsyncContextManagerMock(mock.MagicMock):
 def async_test(f):
     def __inner(*args, **kwargs):
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(f(*args, **kwargs))
+        loop.set_debug(True)
+        E = None
+        warns = []
+
+        try:
+            with warnings.catch_warnings(record=True) as warns:
+                loop.run_until_complete(f(*args, **kwargs))
+
+        except AssertionError as e:
+            E = e
+        except Exception as e:
+            E = e
+
+        for w in warns:
+            warnings.showwarning(w.message,
+                                 w.category,
+                                 w.filename,
+                                 w.lineno)
+        if E is None:
+            args[0].assertEqual(len(warns), 0,
+                                msg="asyncio subsystem generated warnings due to unawaited coroutines")
+        else:
+            raise E
 
     return __inner
 
