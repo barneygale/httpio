@@ -270,3 +270,14 @@ class AsyncHTTPIOFile(object):
     def _assert_open(self):
         if self.closed:
             raise HTTPIOError("I/O operation on closed resource")
+
+
+class AsyncHTTPIOFileContextManagerMixin (object):
+    """This is a mixin for HTTPIOFile to make it act as an async context manager via the AsyncHTTPIOFile class"""
+
+    async def __aenter__(self):
+        self.__acontextmanager = AsyncHTTPIOFile(self.url, self.block_size, **self._kwargs)
+        return await self.__acontextmanager.__aenter__()
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return await self.__acontextmanager.__aexit__(exc_type, exc, tb)

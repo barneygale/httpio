@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from unittest import TestCase
 
-from httpio.async import AsyncHTTPIOFile
+from httpio import HTTPIOFile
 
 import mock
 import random
@@ -141,26 +141,26 @@ class TestAsyncHTTPIOFile(TestCase):
     async def test_throws_exception_when_head_returns_error(self):
         self.error_code = 404
         with self.assertRaises(HTTPException):
-            async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+            async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
                 pass
 
     @async_test
     async def test_read_after_close_fails(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             pass
         with self.assertRaises(IOBaseError):
             await io.read()
 
     @async_test
     async def test_closed(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertTrue(hasattr(io, 'closed'))
             self.assertFalse(io.closed)
         self.assertTrue(io.closed)
 
     @async_test
     async def test_flush_dumps_cache(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual(await io.read(1024), DATA[:1024])
             self.data_source = OTHER_DATA
             await io.seek(0)
@@ -171,7 +171,7 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_peek(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             await io.seek(1500)
             data = await io.peek(1024)
             self.assertEqual(data, DATA[1500:1500 + 1024])
@@ -179,19 +179,19 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_read_gets_data(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             data = await io.read(1024)
         self.assertEqual(data, DATA[0:1024])
 
     @async_test
     async def test_read_gets_data_without_buffering(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/') as io:
+        async with HTTPIOFile('http://www.example.com/test/') as io:
             data = await io.read(1024)
         self.assertEqual(data, DATA[0:1024])
 
     @async_test
     async def test_throws_exception_when_get_returns_error(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.error_code = 404
             with self.assertRaises(HTTPException):
                 await io.read(1024)
@@ -199,7 +199,7 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_read1(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             await io.seek(1024)
             await io.read(1024)
             await io.seek(0)
@@ -219,20 +219,20 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_readable(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertTrue(io.readable())
 
     @async_test
     async def test_readinto(self):
         b = bytearray(1536)
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual(await io.readinto(b), len(b))
             self.assertEqual(bytes(b), DATA[:1536])
 
     @async_test
     async def test_readinto1(self):
         b = bytearray(len(DATA))
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             await io.seek(1024)
             await io.read(1024)
             await io.seek(0)
@@ -253,25 +253,25 @@ class TestAsyncHTTPIOFile(TestCase):
     @async_test
     async def test_readline(self):
         self.data_source = ASCII_DATA
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual((await io.readline()).decode('ascii'),
                              ASCII_LINES[0])
 
     @async_test
     async def test_readlines(self):
         self.data_source = ASCII_DATA
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual([line.decode('ascii') async for line in io.readlines()],
                              [line for line in ASCII_LINES])
 
     @async_test
     async def test_tell_starts_at_zero(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual(await io.tell(), 0)
 
     @async_test
     async def test_seek_and_tell_match(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertEqual(await io.seek(1536), 1536)
             self.assertEqual(await io.tell(), 1536)
 
@@ -286,7 +286,7 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_random_access(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             await io.seek(1536)
             self.assertEqual(await io.read(1024), DATA[1536:2560])
             await io.seek(10, whence=SEEK_CUR)
@@ -298,5 +298,5 @@ class TestAsyncHTTPIOFile(TestCase):
 
     @async_test
     async def test_seekable(self):
-        async with AsyncHTTPIOFile('http://www.example.com/test/', 1024) as io:
+        async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertTrue(io.seekable())
