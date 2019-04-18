@@ -46,9 +46,19 @@ class AsyncHTTPIOFile(object):
         self._cursor = 0
         self._cache = {}
         self._session = None
+        self._aiter = None
 
         self.length = None
         self.closed = True
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._aiter is None:
+            self._aiter = self.readlines()
+
+        return await self._aiter.__anext__()
 
     async def open(self):
         """This method has no direct equivalent in the HTTPIOFile interface, but does things which
@@ -88,7 +98,7 @@ class AsyncHTTPIOFile(object):
     async def read1(self, size=-1):
         return await self._read_impl(size, 1)
 
-    def readable(self):
+    async def readable(self):
         return True
 
     async def readinto(self, b):
@@ -166,7 +176,7 @@ class AsyncHTTPIOFile(object):
             raise HTTPIOError("Invalid argument: cursor=%r" % self._cursor)
         return self._cursor
 
-    def seekable(self):
+    async def seekable(self):
         return True
 
     async def tell(self):
