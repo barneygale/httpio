@@ -51,6 +51,10 @@ class AsyncHTTPIOFile(object):
         self.length = None
         self.closed = True
 
+    def __repr__(self):
+        status = "closed" if self.closed else "open"
+        return "<%s %s %r at %s>" % (status, type(self).__name__, self.url, hex(id(self)))
+
     def __aiter__(self):
         return self
 
