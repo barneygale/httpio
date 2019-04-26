@@ -216,7 +216,7 @@ class SyncHTTPIOFile(BufferedIOBase):
         self.open()
 
 if version_info[0] > 3 or (version_info[0] == 3 and version_info[1] >= 6):
-    from .async import AsyncHTTPIOFileContextManagerMixin
+    from .asyncio import AsyncHTTPIOFileContextManagerMixin
 
     class HTTPIOFile (SyncHTTPIOFile, AsyncHTTPIOFileContextManagerMixin):
         pass
