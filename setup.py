@@ -4,7 +4,7 @@ from sys import version_info
 packages = {
     'httpio': 'httpio'
 }
-install_requires=[
+install_requires = [
     'requests >= 2.10.0',
     'six'
 ]
