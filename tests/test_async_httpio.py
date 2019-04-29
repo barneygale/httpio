@@ -1,5 +1,4 @@
 import asyncio
-import unittest
 from unittest import TestCase
 
 from httpio import HTTPIOFile
@@ -79,6 +78,7 @@ def async_test(f):
 
     return __inner
 
+
 class TestAsyncHTTPIOFile(TestCase):
     def setUp(self):
         self.patchers = {}
@@ -122,15 +122,15 @@ class TestAsyncHTTPIOFile(TestCase):
 
             if self.error_code is None:
                 return AsyncContextManagerMock(
-                    async_context_object=mock.MagicMock(status_code = 200,
+                    async_context_object=mock.MagicMock(status_code=200,
                                                         read=mock.MagicMock(
-                                                            side_effect = async_func(
-                                                                lambda : self.data_source[start:end]))))
+                                                            side_effect=async_func(
+                                                                lambda: self.data_source[start:end]))))
             else:
                 return AsyncContextManagerMock(
                     async_context_object=mock.MagicMock(
-                        status_code = self.error_code,
-                        raise_for_status = mock.MagicMock(side_effect=HTTPException)))
+                        status_code=self.error_code,
+                        raise_for_status=mock.MagicMock(side_effect=HTTPException)))
         self.session.get.side_effect = _get
 
     def tearDown(self):
@@ -141,7 +141,7 @@ class TestAsyncHTTPIOFile(TestCase):
     async def test_throws_exception_when_head_returns_error(self):
         self.error_code = 404
         with self.assertRaises(HTTPException):
-            async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
+            async with HTTPIOFile('http://www.example.com/test/', 1024):
                 pass
 
     @async_test
