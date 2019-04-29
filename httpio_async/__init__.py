@@ -23,7 +23,7 @@ async def open(url, block_size=-1, **kwargs):
     :return: An `httpio.HTTPIOFile` object supporting most of the usual
         file-like object methods.
     """
-    f = AsyncHTTPIOFile(session, url, block_size, **kwargs)
+    f = AsyncHTTPIOFile(url, block_size, **kwargs)
     await f.open()
     return f
 
@@ -49,7 +49,7 @@ class AsyncHTTPIOFile(object):
         self._aiter = None
 
         self.length = None
-        self.closed = True
+        self.closed = False
 
     def __repr__(self):
         status = "closed" if self.closed else "open"
@@ -69,7 +69,7 @@ class AsyncHTTPIOFile(object):
         are the equivalent of what's done in the constructor of that class. Since constructors cannot
         be coroutines this class needs this as a seperate coroutine"""
 
-        if self.closed:
+        if self._session is None:
             self._session = await aiohttp.ClientSession().__aenter__()
             async with self._session.head(self.url, **self._kwargs) as response:
                 response.raise_for_status()
@@ -91,6 +91,7 @@ class AsyncHTTPIOFile(object):
             self.closed = True
 
     async def flush(self):
+        self._assert_open()
         self._cache.clear()
 
     async def peek(self, size):
@@ -138,29 +139,29 @@ class AsyncHTTPIOFile(object):
         self._cursor += len(data)
         return data
 
-    async def readlines(self, size=-1):
+    async def readlines(self, hint=-1):
         self._assert_open()
 
-        if size < 1 or self._cursor + size > self.length:
-            size = self.length - self._cursor
+        if hint < 1 or self._cursor + hint > self.length:
+            hint = self.length - self._cursor
 
-        if size == 0:
+        if hint == 0:
             yield b""
         else:
             if self.block_size <= 0:
-                data = await self._read_raw(self._cursor, self._cursor + size)
+                data = await self._read_raw(self._cursor, self._cursor + hint)
                 for line in data.splitlines(True):
                     yield line
             else:
                 data = b''
-                while len(data) < size:
-                    async for sector in self._read_cached(size,
+                while len(data) < hint:
+                    async for sector in self._read_cached(hint,
                                                           max_raw_reads=1):
                         for line in sector.splitlines(True):
                             data += line
                             if data.endswith(b'\n'):
                                 yield data
-                                size -= len(data)
+                                hint -= len(data)
                                 self._cursor += len(data)
                                 data = b''
                 self._cursor += len(data)
@@ -244,7 +245,6 @@ class AsyncHTTPIOFile(object):
 
         raw_reads = 0
 
-        data = []
         for idx in range(sector0, sector1):
             if idx not in self._cache:
                 if max_raw_reads == raw_reads:
