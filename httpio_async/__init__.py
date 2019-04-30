@@ -85,7 +85,8 @@ class AsyncHTTPIOFile(object):
 
     async def close(self):
         if not self.closed:
-            await self._session.__aexit__(None, None, None)
+            if self._session is not None:
+                await self._session.__aexit__(None, None, None)
             self._session = None
             self._cache.clear()
             self.closed = True
