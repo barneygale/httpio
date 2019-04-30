@@ -15,7 +15,7 @@ if version_info[0] > 3 or (version_info[0] == 3 and version_info[1] >= 6):
 
 setup(
     name='httpio',
-    version='0.2.0',
+    version='0.3.0',
     author='Barney Gale',
     author_email='barney@barneygale.co.uk',
     url='https://github.com/barneygale/httpio',
