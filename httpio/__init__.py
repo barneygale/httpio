@@ -6,6 +6,7 @@ import requests
 from io import BufferedIOBase
 
 from six import PY3
+from sys import version_info
 
 __all__ = ["open", "HTTPIOError", "HTTPIOFile"]
 
@@ -24,45 +25,61 @@ def open(url, block_size=-1, **kwargs):
     :return: An `httpio.HTTPIOFile` object supporting most of the usual
         file-like object methods.
     """
-    return HTTPIOFile(url, block_size, **kwargs)
+    f = HTTPIOFile(url, block_size, **kwargs)
+    f.open()
+    return f
 
 
 class HTTPIOError(IOBaseError):
     pass
 
 
-class HTTPIOFile(BufferedIOBase):
+class SyncHTTPIOFile(BufferedIOBase):
     def __init__(self, url, block_size=-1, **kwargs):
-        super(HTTPIOFile, self).__init__()
+        super(SyncHTTPIOFile, self).__init__()
         self.url = url
         self.block_size = block_size
 
         self._kwargs = kwargs
         self._cursor = 0
         self._cache = {}
-        self._session = requests.Session()
+        self._session = None
 
-        response = self._session.head(self.url, **kwargs)
-        response.raise_for_status()
-        try:
-            self.length = int(response.headers['Content-Length'])
-        except KeyError:
-            raise HTTPIOError("Server does not report content length")
-        if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
-            raise HTTPIOError("Server does not accept 'Range' headers")
+        self.length = None
+
+        self._closing = False
 
     def __repr__(self):
         status = "closed" if self.closed else "open"
-        return "<%s HTTPIOFile %r at %s>" % (status, self.url, hex(id(self)))
+        return "<%s %s %r at %s>" % (status, type(self).__name__, self.url, hex(id(self)))
+
+    def __enter__(self):
+        self.open()
+        return super(SyncHTTPIOFile, self).__enter__()
+
+    def open(self):
+        self._assert_not_closed()
+        if not self._closing and self._session is None:
+            self._session = requests.Session()
+            response = self._session.head(self.url, **self._kwargs)
+            response.raise_for_status()
+            try:
+                self.length = int(response.headers['Content-Length'])
+            except KeyError:
+                raise HTTPIOError("Server does not report content length")
+            if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
+                raise HTTPIOError("Server does not accept 'Range' headers")
 
     def close(self):
-        if not self.closed:
+        self._closing = True
+        self._cache.clear()
+        if self._session is not None:
             self._session.close()
-            self._cache.clear()
-        super(HTTPIOFile, self).close()
+        super(SyncHTTPIOFile, self).close()
 
     def flush(self):
-        self._assert_open()
+        self._assert_not_closed()
+        self.open()
         self._cache.clear()
 
     def peek(self, size=-1):
@@ -88,7 +105,7 @@ class HTTPIOFile(BufferedIOBase):
         return self._readinto_impl(b, 1)
 
     def seek(self, offset, whence=0):
-        self._assert_open()
+        self._assert_not_closed()
         if whence == 0:
             self._cursor = offset
         elif whence == 1:
@@ -105,14 +122,16 @@ class HTTPIOFile(BufferedIOBase):
         return True
 
     def tell(self):
-        self._assert_open()
+        self._assert_not_closed()
+        self.open()
         return self._cursor
 
     def write(self, *args, **kwargs):
         raise HTTPIOError("Writing not supported on http resource")
 
     def _read_impl(self, size=-1, max_raw_reads=-1):
-        self._assert_open()
+        self._assert_not_closed()
+        self.open()
 
         if size < 1 or self._cursor + size > self.length:
             size = self.length - self._cursor
@@ -131,7 +150,8 @@ class HTTPIOFile(BufferedIOBase):
         return data
 
     def _readinto_impl(self, b, max_raw_reads=-1):
-        self._assert_open()
+        self._assert_not_closed()
+        self.open()
 
         size = len(b)
 
@@ -200,6 +220,16 @@ class HTTPIOFile(BufferedIOBase):
         response.raise_for_status()
         return response.content
 
-    def _assert_open(self):
+    def _assert_not_closed(self):
         if self.closed:
             raise HTTPIOError("I/O operation on closed resource")
+
+
+if version_info[0] > 3 or (version_info[0] == 3 and version_info[1] >= 6):
+    from .asyncio import AsyncHTTPIOFileContextManagerMixin
+
+    class HTTPIOFile (SyncHTTPIOFile, AsyncHTTPIOFileContextManagerMixin):
+        pass
+else:
+    class HTTPIOFile(SyncHTTPIOFile):
+        pass

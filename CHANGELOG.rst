@@ -1,3 +1,8 @@
+== 0.3.0 ==
+
+* Addition of asyncio compatible interface for use in python versions 3.6 and above
+* Testing in python 3.7 using tox
+
 == 0.2.0 ==
 
 * HTTPIOFile descends from io.BufferedIOBase and implements the full protocol

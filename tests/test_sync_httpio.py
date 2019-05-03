@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import unittest
 from unittest import TestCase
 
-from httpio import HTTPIOFile, HTTPIOError
+from httpio import HTTPIOFile
 from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
@@ -93,7 +93,8 @@ class TestHTTPIOFile(TestCase):
     def test_throws_exception_when_head_returns_error(self):
         self.error_code = 404
         with self.assertRaises(HTTPException):
-            HTTPIOFile('http://www.example.com/test/', 1024)
+            with HTTPIOFile('http://www.example.com/test/', 1024):
+                pass
 
     def test_implements_buffered_io_base(self):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
