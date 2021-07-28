@@ -35,10 +35,11 @@ class HTTPIOError(IOBaseError):
 
 
 class SyncHTTPIOFile(BufferedIOBase):
-    def __init__(self, url, block_size=-1, **kwargs):
+    def __init__(self, url, block_size=-1, no_head_request=False, **kwargs):
         super(SyncHTTPIOFile, self).__init__()
         self.url = url
         self.block_size = block_size
+        self.no_head_request = no_head_request
 
         self._kwargs = kwargs
         self._cursor = 0
@@ -57,18 +58,38 @@ class SyncHTTPIOFile(BufferedIOBase):
         self.open()
         return super(SyncHTTPIOFile, self).__enter__()
 
+    def _check_ranges_set_length(self, response):
+        try:
+            self.length = int(response.headers['Content-Length'])
+        except KeyError:
+            raise HTTPIOError("Server does not report content length")
+        if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
+            raise HTTPIOError("Server does not accept 'Range' headers")
+
+    def _check_file_headers_set_length(self, getter):
+        pass
+
     def open(self):
         self._assert_not_closed()
         if not self._closing and self._session is None:
             self._session = requests.Session()
-            response = self._session.head(self.url, **self._kwargs)
-            response.raise_for_status()
-            try:
-                self.length = int(response.headers['Content-Length'])
-            except KeyError:
-                raise HTTPIOError("Server does not report content length")
-            if response.headers.get('Accept-Ranges', '').lower() != 'bytes':
-                raise HTTPIOError("Server does not accept 'Range' headers")
+
+            if not self.no_head_request:
+                response = self._session.head(self.url, **self._kwargs)
+
+                # In some cases, notably including AWS S3 presigned URLs, it's only possible to GET the URL and HEAD
+                # isn't supported. In these cases we skip raising an exception and fall through to the `no_head_request`
+                # behaviour instead
+                if response.status_code != 405 and response.status_code != 403:
+                    response.raise_for_status()
+                    self._check_ranges_set_length(response)
+                    return
+
+            # GET the URL with stream=True to avoid downloading the full response: exiting the context manager will
+            # close the connection
+            with self._session.get(self.url, stream=True, **self._kwargs) as response:
+                response.raise_for_status()
+                self._check_ranges_set_length(response)
 
     def close(self):
         self._closing = True
