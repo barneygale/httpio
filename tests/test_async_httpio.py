@@ -1,9 +1,9 @@
 import asyncio
 from unittest import TestCase
+from unittest import mock
 
 from httpio import HTTPIOFile
 
-import mock
 import re
 import warnings
 
