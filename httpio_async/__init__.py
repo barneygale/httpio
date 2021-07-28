@@ -32,15 +32,17 @@ class AsyncHTTPIOFile(object):
     """An asynchronous equivalent to httpio.HTTPIOFile.
     Sadly this class cannot descend from that one for technical reasons.
     """
-    def __init__(self, url, block_size=-1, **kwargs):
+    def __init__(self, url, block_size=-1, no_head_request=False, **kwargs):
         """
         :param url: The URL of the file to open
         :param block_size: The cache block size, or `-1` to disable caching.
+        :param no_head_request: Don't make a HEAD request to check the file size, use a GET instead
         :param kwargs: Additional arguments to pass to `session.get`
         """
         super(AsyncHTTPIOFile, self).__init__()
         self.url = url
         self.block_size = block_size
+        self.no_head_request = no_head_request
 
         self._kwargs = kwargs
         self._cursor = 0
@@ -71,10 +73,24 @@ class AsyncHTTPIOFile(object):
 
         if self._session is None:
             self._session = await aiohttp.ClientSession().__aenter__()
-            async with self._session.head(self.url, **self._kwargs) as response:
+
+            if not self.no_head_request:
+                async with self._session.head(self.url, **self._kwargs) as response:
+                    # In some cases, notably including AWS S3 presigned URLs, it's only possible to GET the URL and HEAD
+                    # isn't supported. In these cases we skip raising an exception and fall through to the
+                    # `no_head_request` behaviour instead
+                    if response.status != 405 and response.status != 403:
+                        response.raise_for_status()
+                        self.length = int(response.headers.get('content-length', None))
+                        self.closed = False
+                        return
+
+            async with self._session.get(self.url, **self._kwargs) as response:
                 response.raise_for_status()
                 self.length = int(response.headers.get('content-length', None))
                 self.closed = False
+                # Note that not reading the response body will cause the underlying connection to be closed before the
+                # server sends the file
 
     async def __aenter__(self):
         await self.open()
@@ -291,7 +307,11 @@ class AsyncHTTPIOFileContextManagerMixin (object):
     """This is a mixin for HTTPIOFile to make it act as an async context manager via the AsyncHTTPIOFile class"""
 
     async def __aenter__(self):
-        self.__acontextmanager = AsyncHTTPIOFile(self.url, self.block_size, **self._kwargs)
+        self.__acontextmanager = AsyncHTTPIOFile(self.url,
+                                                 self.block_size,
+                                                 no_head_request=self.no_head_request,
+                                                 **self._kwargs)
+
         return await self.__acontextmanager.__aenter__()
 
     async def __aexit__(self, exc_type, exc, tb):

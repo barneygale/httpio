@@ -81,17 +81,18 @@ class TestAsyncHTTPIOFile(TestCase):
 
         self.data_source = DATA
         self.error_code = None
+        self.head_error_code = None
 
         def _head(url, **kwargs):
             m = AsyncContextManagerMock()
-            if self.error_code is None:
-                m.async_context_object.status_code = 204
+            if self.error_code is None and self.head_error_code is None:
+                m.async_context_object.status = 204
                 m.async_context_object.headers = {'content-length':
                                                   len(self.data_source),
                                                   'Accept-Ranges':
                                                   'bytes'}
             else:
-                m.async_context_object.status_code = self.error_code
+                m.async_context_object.status = self.error_code or self.head_error_code
                 m.async_context_object.raise_for_status = mock.MagicMock(side_effect=HTTPException)
             return m
 
@@ -109,14 +110,14 @@ class TestAsyncHTTPIOFile(TestCase):
 
             if self.error_code is None:
                 return AsyncContextManagerMock(
-                    async_context_object=mock.MagicMock(status_code=200,
+                    async_context_object=mock.MagicMock(status=200,
                                                         read=mock.MagicMock(
                                                             side_effect=async_func(
                                                                 lambda: self.data_source[start:end]))))
             else:
                 return AsyncContextManagerMock(
                     async_context_object=mock.MagicMock(
-                        status_code=self.error_code,
+                        status=self.error_code,
                         raise_for_status=mock.MagicMock(side_effect=HTTPException)))
         self.session.get.side_effect = _get
 
@@ -288,3 +289,27 @@ class TestAsyncHTTPIOFile(TestCase):
     async def test_seekable(self):
         async with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             self.assertTrue(await io.seekable())
+
+    @async_test
+    async def test_ignores_head_error_when_no_head_request_set(self):
+        """If the no_head_request flag is set, an error returned by HEAD should be ignored"""
+        self.head_error_code = 404
+        async with HTTPIOFile('http://www.example.com/test/', 1024, no_head_request=True):
+            pass
+
+    @async_test
+    async def test_throws_exception_when_get_returns_error_when_no_head_request_set(self):
+        self.error_code = 404
+        with self.assertRaises(HTTPException):
+            async with HTTPIOFile('http://www.example.com/test/', 1024, no_head_request=True):
+                pass
+
+    @async_test
+    async def test_retries_with_get_when_head_returns_403(self):
+        """Test data can be read when the GET works but the HEAD request returns 403
+
+        This happens when given an S3 pre-signed URL, because they only support one method
+        """
+        self.head_error_code = 403
+        async with HTTPIOFile('http://www.example.com/test/', 1024):
+            pass
