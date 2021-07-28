@@ -9,24 +9,11 @@ from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
 import mock
-import random
 import re
 
-from six import int2byte, PY3
+from six import PY3
 
-
-# 8 MB of random data for the HTTP requests to return
-DATA = b''.join(int2byte(random.randint(0, 0xFF))
-                for _ in range(0, 8*1024*1024))
-
-OTHER_DATA = b''.join(int2byte(random.randint(0, 0xFF))
-                      for _ in range(0, 8*1024*1024))
-
-ASCII_LINES = ["Line0\n",
-               "Line the first\n",
-               "Line Returns\n",
-               "Line goes forth"]
-ASCII_DATA = b''.join(line.encode('ascii') for line in ASCII_LINES)
+from random_source_data import DATA, OTHER_DATA, ASCII_DATA, ASCII_LINES
 
 
 # The expected exception from unimplemented IOBase operations
@@ -51,16 +38,17 @@ class TestHTTPIOFile(TestCase):
 
         self.data_source = DATA
         self.error_code = None
+        self.head_error_code = None
 
         def _head(url, **kwargs):
-            if self.error_code is None:
+            if self.error_code is None and self.head_error_code is None:
                 return mock.MagicMock(status_code=204,
                                       headers={'Content-Length':
                                                len(self.data_source),
                                                'Accept-Ranges':
                                                'bytes'})
             else:
-                return mock.MagicMock(status_code=self.error_code,
+                return mock.MagicMock(status_code=self.head_error_code or self.error_code,
                                       raise_for_status=mock.MagicMock(
                                           side_effect=HTTPException))
 
@@ -77,12 +65,22 @@ class TestHTTPIOFile(TestCase):
                         end = int(m.group(2)) + 1
 
             if self.error_code is not None:
-                return mock.MagicMock(status_code=self.error_code,
-                                      raise_for_status=mock.MagicMock(
-                                          side_effect=HTTPException))
+                response_mock = mock.MagicMock(status_code=self.error_code,
+                                               raise_for_status=mock.MagicMock(side_effect=HTTPException))
+                response_mock.__enter__.return_value = response_mock
+
+                return response_mock
             else:
-                return mock.MagicMock(status_code=200,
-                                      content=self.data_source[start:end])
+                content_length = (end or len(self.data_source)) - (start or 0)
+
+                response_mock = mock.MagicMock(status_code=200,
+                                               headers={
+                                                   'Content-Length': content_length,
+                                                   'Accept-Ranges': 'bytes'},
+                                               content=self.data_source[start:end])
+
+                response_mock.__enter__.return_value = response_mock
+                return response_mock
 
         self.session.get.side_effect = _get
 
@@ -271,6 +269,27 @@ class TestHTTPIOFile(TestCase):
         with HTTPIOFile('http://www.example.com/test/', 1024) as io:
             with self.assertRaises(IOBaseError):
                 io.writelines([line.encode('ascii') for line in ASCII_LINES])
+
+    def test_ignores_head_error_when_no_head_request_set(self):
+        """If the no_head_request flag is set, an error returned by HEAD should be ignored"""
+        self.head_error_code = 404
+        with HTTPIOFile('http://www.example.com/test/', 1024, no_head_request=True):
+            pass
+
+    def test_throws_exception_when_get_returns_error_when_no_head_request_set(self):
+        self.error_code = 404
+        with self.assertRaises(HTTPException):
+            with HTTPIOFile('http://www.example.com/test/', 1024, no_head_request=True):
+                pass
+
+    def test_retries_with_get_when_head_returns_403(self):
+        """Test data can be read when the GET works but the HEAD request returns 403
+
+        This happens when given an S3 pre-signed URL, because they only support one method
+        """
+        self.head_error_code = 403
+        with HTTPIOFile('http://www.example.com/test/', 1024):
+            pass
 
 
 if __name__ == "__main__":
