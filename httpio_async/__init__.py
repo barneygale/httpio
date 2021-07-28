@@ -32,17 +32,19 @@ class AsyncHTTPIOFile(object):
     """An asynchronous equivalent to httpio.HTTPIOFile.
     Sadly this class cannot descend from that one for technical reasons.
     """
-    def __init__(self, url, block_size=-1, no_head_request=False, **kwargs):
+    def __init__(self, url, block_size=-1, no_head_request=False, session_args={}, **kwargs):
         """
         :param url: The URL of the file to open
         :param block_size: The cache block size, or `-1` to disable caching.
         :param no_head_request: Don't make a HEAD request to check the file size, use a GET instead
+        :param session_args: Additional kwargs to pass when creating aiohttp.ClientSession (e.g. trust_env)
         :param kwargs: Additional arguments to pass to `session.get`
         """
         super(AsyncHTTPIOFile, self).__init__()
         self.url = url
         self.block_size = block_size
         self.no_head_request = no_head_request
+        self.session_args = session_args
 
         self._kwargs = kwargs
         self._cursor = 0
@@ -72,7 +74,7 @@ class AsyncHTTPIOFile(object):
         be coroutines this class needs this as a seperate coroutine"""
 
         if self._session is None:
-            self._session = await aiohttp.ClientSession().__aenter__()
+            self._session = await aiohttp.ClientSession(**self.session_args).__aenter__()
 
             if not self.no_head_request:
                 async with self._session.head(self.url, **self._kwargs) as response:
