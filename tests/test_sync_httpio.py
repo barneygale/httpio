@@ -9,24 +9,11 @@ from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
 import mock
-import random
 import re
 
-from six import int2byte, PY3
+from six import PY3
 
-
-# 8 MB of random data for the HTTP requests to return
-DATA = b''.join(int2byte(random.randint(0, 0xFF))
-                for _ in range(0, 8*1024*1024))
-
-OTHER_DATA = b''.join(int2byte(random.randint(0, 0xFF))
-                      for _ in range(0, 8*1024*1024))
-
-ASCII_LINES = ["Line0\n",
-               "Line the first\n",
-               "Line Returns\n",
-               "Line goes forth"]
-ASCII_DATA = b''.join(line.encode('ascii') for line in ASCII_LINES)
+from random_source_data import DATA, OTHER_DATA, ASCII_DATA, ASCII_LINES
 
 
 # The expected exception from unimplemented IOBase operations
