@@ -1,3 +1,10 @@
+== 0.4.0 ==
+
+* Added fallback behaviour to try GET for content length when HEAD isn't available
+* Added `no_head_request` option
+* Added `session_args` to pass kwargs to the constructor of `aiohttp.ClientSession`
+* Made unit tests slightly faster when generating data
+
 == 0.3.0 ==
 
 * Addition of asyncio compatible interface for use in python versions 3.6 and above
