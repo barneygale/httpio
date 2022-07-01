@@ -1,6 +1,6 @@
 from unittest import IsolatedAsyncioTestCase, mock
 
-from httpio import HTTPIOFile
+from httpio_bbc import HTTPIOFile
 
 import aiohttp
 import random

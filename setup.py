@@ -1,7 +1,7 @@
 from setuptools import setup
 
 # Basic metadata
-name = 'httpio'
+name = 'httpio_bbc'
 description = 'HTTP resources as random-access file-like objects'
 url = 'https://github.com/bbc/httpio'
 author = 'Barney Gale, now maintained by BBC R&D'
@@ -23,7 +23,7 @@ except IOError:
     __version__ = "0.0.0"
 
 package_names = [
-    'httpio',
+    'httpio_bbc',
 ]
 packages = {
     pkg: pkg.replace('.', '/') for pkg in package_names

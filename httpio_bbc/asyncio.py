@@ -4,7 +4,7 @@ The interface is where possible as similar to the existing httpio interface as p
 file like objects of python) except that many methods are replaced with asynchronous coroutines."""
 
 import aiohttp
-from httpio import HTTPIOError
+from httpio_bbc import HTTPIOError
 
 
 __all__ = ["AsyncHTTPIOFile", "HTTPIOError", "open"]

@@ -1,5 +1,5 @@
-httpio
-======
+httpio_bbc
+==========
 
 HTTP resources as random-access file-like objects
 
@@ -20,11 +20,13 @@ processes.
 Installation
 ------------
 
-Use ``pip`` to install httpio:
+This fork isn't published to PyPI, but it can be installed directly
+from the repo, either by cloning the repo and running `make install`
+or directly with `pip install git+ssh://git@github.com/bbc/httpio`
+(note that the versioning won't work in the latter case, it will be v0.0.0).
 
-.. code-block:: console
-
-    $ pip install httpio
+Alternatively for internal users the package is also published to
+R&D Artifactory in the ap-python repo.
 
 Usage
 -----
@@ -32,7 +34,7 @@ Usage
 .. code-block:: python
 
     import zipfile
-    import httpio
+    import httpio_bbc as httpio
 
     url = "http://some/large/file.zip"
     with httpio.open(url) as fp:

@@ -4,7 +4,7 @@ from __future__ import absolute_import
 import unittest
 from unittest import TestCase, mock
 
-from httpio import HTTPIOFile
+from httpio_bbc import HTTPIOFile
 from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
