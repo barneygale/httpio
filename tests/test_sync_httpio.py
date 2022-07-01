@@ -2,13 +2,12 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import unittest
-from unittest import TestCase
+from unittest import TestCase, mock
 
 from httpio import HTTPIOFile
 from io import BufferedIOBase, UnsupportedOperation
 from io import SEEK_CUR, SEEK_END
 
-import mock
 import random
 import re
 
