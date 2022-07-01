@@ -1,7 +1,4 @@
 include COPYING.txt
 include README.rst
-include setup.py
-include httpio.py
-include tests/test_httpio.py
-include tox.ini
-include CHANGELOG.rst
+recursive-include tests *.py
+include httpio/py.typed
