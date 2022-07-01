@@ -134,7 +134,7 @@ class AsyncHTTPIOFile(object):
                     if b'\n' in sector:
                         break
                 if b'\n' in sector:
-                        break
+                    break
 
         data = data.splitlines(True)[0]
         self._cursor += len(data)
