@@ -1,0 +1,182 @@
+{% macro preamble() -%}
+# syntax=docker/dockerfile:1.2
+
+# Args needed for base images
+ARG BUILD_TAG
+ARG CLOUDFIT_BASE_NAME=ap-docker.virt.ch.bbc.co.uk:443/cloudfit/cloudfit_base
+ARG CLOUDFIT_BASE_LABEL=latest
+{%- endmacro %}
+
+{% macro includeapilayer(apimodname) -%}
+###############################################################################
+# Stage: api - Alias for api specification layer
+###############################################################################
+FROM {{ apimodname }}:${BUILD_TAG} as api
+{%- endmacro %}
+
+
+{% macro source(base_image="${CLOUDFIT_BASE_NAME}:${CLOUDFIT_BASE_LABEL}") -%}
+###############################################################################
+# Stage: source - Builds python sdist source package for layer
+###############################################################################
+FROM ${CLOUDFIT_BASE_NAME}:${CLOUDFIT_BASE_LABEL} AS source
+WORKDIR /{{ modname }}/
+
+{% if with_api %}
+COPY --from=api /api ./{{ modname }}/apidocs
+{% endif -%}
+COPY . .
+
+RUN python3 setup.py sdist
+{%- endmacro %}
+
+
+{% macro layer(base_image="${CLOUDFIT_BASE_NAME}:${CLOUDFIT_BASE_LABEL}", entrypoint=True, extra_requirements_file="") -%}
+###############################################################################
+# Stage: layer - Has layer package and its requirements installed
+###############################################################################
+FROM {{ base_image }} AS layer
+WORKDIR /{{ modname }}/
+
+# Copy in wheels if provided
+COPY wheels/ ./wheels
+
+# Install requirements
+COPY requirements.txt ./
+{%   if extra_requirements_file != "" -%}
+COPY {{ extra_requirements_file }} ./
+RUN cat {{ extra_requirements_file }} >> ./requirements.txt
+{%-  endif %}
+RUN --mount=type=cache,target=/root/.cache/pip --mount=type=secret,id=forgecert pip install -f ./wheels -r requirements.txt
+
+# Copy in everything else and install the package
+ARG VERSION
+COPY --from=source /{{ modname }}/dist/{{ modname }}-${VERSION}.tar.gz ./
+RUN --mount=type=cache,target=/root/.cache/pip --mount=type=secret,id=forgecert tar -xvzp --strip-components=1 -f ./{{ modname }}-${VERSION}.tar.gz && pip install -f ./wheels -e .
+
+# Set the default command
+{%   if entrypoint -%}
+ENTRYPOINT ["{{ modname }}"]
+{%-  else -%}
+ENTRYPOINT []
+{%-  endif %}
+{%- endmacro %}
+
+{% macro testdeps() -%}
+###############################################################################
+# Stage: testdeps - Has test dependencies installed only
+###############################################################################
+FROM ${CLOUDFIT_BASE_NAME}:${CLOUDFIT_BASE_LABEL} AS testdeps
+WORKDIR /testdeps/
+
+# Copy in wheels if provided
+COPY wheels/ ./wheels
+
+# Install test requirements
+COPY constraints.txt ./
+COPY test-requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip --mount=type=secret,id=forgecert python -m pip install -f ./wheels --user -c constraints.txt -r ./test-requirements.txt flake8 "mypy>=0.910"
+{%- endmacro %}
+
+{% macro tests() -%}
+###############################################################################
+# Stage: tests - Combines Layer with test dependencies
+###############################################################################
+FROM layer AS tests
+WORKDIR /{{ modname }}/
+
+# Install test dependencies
+COPY --from=testdeps /root/.local/lib/ /root/.local/lib/
+
+ENTRYPOINT []
+{%- endmacro %}
+
+{% macro unittest() -%}
+###############################################################################
+# Stage: unittest - Runs unittests
+###############################################################################
+FROM tests AS unittest
+WORKDIR /{{ modname }}/
+
+# Set the default command
+ENTRYPOINT ["python", "-m", "unittest"]
+CMD ["-v"]
+{%- endmacro %}
+
+{% macro flake8() -%}
+###############################################################################
+# Stage: flake8 - Runs flake8 linter
+###############################################################################
+FROM tests AS flake8
+WORKDIR /{{ modname }}/
+
+# Copy in .flake8
+COPY .flake8 ./
+
+# Set the default command
+ENTRYPOINT ["python", "-m", "flake8"]
+CMD ["{{ modname }}", "tests"]
+{%- endmacro %}
+
+{% macro mypy() -%}
+###############################################################################
+# Stage: mypy - Runs mypy type-checker
+###############################################################################
+FROM tests AS mypy
+WORKDIR /{{ modname }}/
+
+# Copy in .flake8 and setup.cfg
+COPY setup.cfg ./
+
+# Create mypy cache dir. If this is missing, it can mask some errors
+RUN mkdir .mypy_cache
+
+# Set the default command
+ENTRYPOINT ["python", "-m", "mypy", "--install-types", "--non-interactive"]
+CMD ["-p", "{{ modname }}"]
+{%- endmacro %}
+
+{% macro wheel() -%}
+###############################################################################
+# Stage: wheel - Generates sdist and wheel packages for distribution
+###############################################################################
+FROM layer AS wheel
+WORKDIR /{{ modname }}/
+
+COPY .tmp/_full_version.py ./{{ modname }}/_version.py
+RUN pip install -f ./wheels -e .
+COPY .tmp/run_with_dir_modes.sh /
+RUN chmod u+x /run_with_dir_modes.sh
+ENTRYPOINT ["/run_with_dir_modes.sh", "./dist", "python", "./setup.py", "sdist", "bdist_wheel"]
+{%- endmacro %}
+
+{% macro docs() -%}
+###############################################################################
+# Stage: docs - Generates documentation from docstrings
+###############################################################################
+FROM wheel AS docs
+WORKDIR /docs/
+
+RUN --mount=type=cache,target=/root/.cache/pip --mount=type=secret,id=forgecert pip install pdoc3
+
+ENTRYPOINT ["/run_with_dir_modes.sh", ".", "pdoc3"]
+CMD ["--html", "--force", "--output-dir", ".", "{{ modname }}"]
+{%- endmacro %}
+
+{% macro alembic() -%}
+###############################################################################
+# Stage: alembic - The alembic DB migration tool configured for this layer
+###############################################################################
+FROM ap-docker.virt.ch.bbc.co.uk:443/cloudfit/alembic:latest as alembic_base
+
+FROM layer AS alembic
+
+WORKDIR /data
+RUN chmod a+w /data
+
+COPY --from=alembic_base /data/requirements.txt /data/alembic.ini.j2 /data/default_entrypoint.sh .
+
+RUN --mount=type=cache,target=/root/.cache/pip --mount=type=secret,id=forgecert pip install -r requirements.txt
+
+ENTRYPOINT ["./default_entrypoint.sh"]
+{%- endmacro %}
