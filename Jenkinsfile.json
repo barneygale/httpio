@@ -1,0 +1,13 @@
+{
+    "docker": true,
+    "stages": [
+        "@setup",
+        "@make check-static-files",
+        "@make lint",
+        "@make docs",
+        "@make test",
+        "@make wheel",
+        "@upload artifactory",
+        "@upload docs-recursive ./docs"
+    ]
+}

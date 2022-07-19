@@ -1,0 +1,19 @@
+{%- import 'static-commontooling/docker/Dockerfile_multi_macros.j2' as macros with context -%}
+
+{{ macros.preamble() }}
+
+{{ macros.source() }}
+
+{{ macros.layer(entrypoint=False) }}
+
+{{ macros.testdeps() }}
+
+{{ macros.tests() }}
+
+{{ macros.unittest() }}
+
+{{ macros.flake8() }}
+
+{{ macros.wheel() }}
+
+{{ macros.docs() }}

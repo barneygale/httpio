@@ -1,28 +1,55 @@
 from setuptools import setup
-from sys import version_info
 
+# Basic metadata
+name = 'httpio_bbc'
+description = 'HTTP resources as random-access file-like objects'
+url = 'https://github.com/bbc/httpio'
+author = 'Barney Gale, now maintained by BBC R&D'
+author_email = 'cloudfit-opensource@rd.bbc.co.uk'
+license = 'MIT'
+
+try:
+    long_description = open('README.rst').read()
+except FileNotFoundError:
+    # Readme file not available yet, just use the short description for now
+    long_description = description
+
+# Execute version file to set version variable
+try:
+    with open(("{}/_version.py".format(name)), "r") as fp:
+        exec(fp.read())
+except IOError:
+    # Version file doesn't exist, fake it for now
+    __version__ = "0.0.0"
+
+package_names = [
+    'httpio_bbc',
+]
 packages = {
-    'httpio': 'httpio'
+    pkg: pkg.replace('.', '/') for pkg in package_names
 }
-install_requires = [
-    'requests >= 2.10.0',
-    'six'
+
+packages_required = [
+    "requests >= 2.10.0",
+    "six",
+    "aiohttp >= 3.5.4",
 ]
 
-if version_info[0] > 3 or (version_info[0] == 3 and version_info[1] >= 6):
-    packages['httpio_async'] = 'httpio_async'
-    install_requires.append('aiohttp >= 3.5.4')
-
 setup(
-    name='httpio',
-    version='0.3.0',
-    author='Barney Gale',
-    author_email='barney@barneygale.co.uk',
-    url='https://github.com/barneygale/httpio',
-    license='MIT',
-    description='HTTP resources as random-access file-like objects',
-    long_description=open('README.rst').read(),
-    packages=list(packages.keys()),
+    name=name,
+    python_requires='>=3.10',
+    version=__version__,
+    description=description,
+    url=url,
+    author=author,
+    author_email=author_email,
+    license=license,
+    packages=package_names,
     package_dir=packages,
-    install_requires=install_requires
+    package_data={
+    },
+    install_requires=packages_required,
+    scripts=[],
+    data_files=[],
+    long_description=long_description
 )

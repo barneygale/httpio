@@ -1,5 +1,5 @@
-httpio
-======
+httpio_bbc
+==========
 
 HTTP resources as random-access file-like objects
 
@@ -12,14 +12,21 @@ that ``read()`` makes a request with the ``Range`` header set. It also
 supports caching of contents using a configurable block size, and will
 reuse TCP connections where possible.
 
+This is a fork of the original project at https://github.com/barneygale/httpio,
+maintained by BBC R&D's Cloudfit Production team, with some additional
+functionality we needed, and applying our (opinionated!) CI and repo management
+processes.
+
 Installation
 ------------
 
-Use ``pip`` to install httpio:
+This fork isn't published to PyPI, but it can be installed directly
+from the repo, either by cloning the repo and running `make install`
+or directly with `pip install git+ssh://git@github.com/bbc/httpio`
+(note that the versioning won't work in the latter case, it will be v0.0.0).
 
-.. code-block:: console
-
-    $ pip install httpio
+Alternatively for internal users the package is also published to
+R&D Artifactory in the ap-python repo.
 
 Usage
 -----
@@ -27,7 +34,7 @@ Usage
 .. code-block:: python
 
     import zipfile
-    import httpio
+    import httpio_bbc as httpio
 
     url = "http://some/large/file.zip"
     with httpio.open(url) as fp:
@@ -38,19 +45,27 @@ Usage
 
 .. _BufferedIOBase: https://docs.python.org/3/library/io.html#io.BufferedIOBase
 
-Unit Tests
-----------
+Development
+-----------
 
-Unit tests are provided for the standard behaviours implemented by
-the library. They can be run with
+This repository uses a library of makefiles, templates, and other tools for
+development tooling and CI workflows.
+To discover operations that may be run against this repo, run `make` in the top
+level of the repo.
 
-.. code-block:: console
-    
-    $ python -m unittest discover -s tests
+Testing
+-------
 
-or a ``tox.ini`` file is provided which allows the tests to be run in
-virtual environments using the ``tox`` tool:
+To run the unittests for this package in a docker container, run `make test` in
+the top level of the repository.
 
-.. code-block:: console
-    
-    $ tox
+Continuous Integration
+----------------------
+
+This repository includes a Jenkinsfile which makes use of custom steps defined
+in a BBC internal library for use on our own Jenkins instances. As such it will
+not be immediately useable outside of a BBC environment, but may still serve as
+inspiration and an example of how to implement CI for this package.
+
+A Makefile is provided at the top-level of the repository to run common tasks.
+Run `make`` in the top directory of this repository to see what actions are available.
