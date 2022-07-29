@@ -125,8 +125,8 @@ CMD ["{{ modname }}", "tests"]
 FROM tests AS mypy
 WORKDIR /{{ modname }}/
 
-# Copy in .flake8 and setup.cfg
-COPY setup.cfg ./
+# Copy in .mypy.ini
+COPY .mypy.ini ./
 
 # Create mypy cache dir. If this is missing, it can mask some errors
 RUN mkdir .mypy_cache
