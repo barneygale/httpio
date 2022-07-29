@@ -27,7 +27,7 @@ pipeline {
         booleanParam(name: "FORCE_DOCSUPLOAD", defaultValue: false, description: "Force API docs upload")
         booleanParam(name: "FORCE_ARTIFACTORYUPLOAD", defaultValue: false, description: "Force upload of python wheels to artifactory")
         string(name: "PYTHON_VERSION", defaultValue: "3.10", description: "Python version to make available in tox")
-        string(name: "COMMONTOOLING_BRANCH", defaultValue: "main")
+        string(name: "COMMONTOOLING_BRANCH", defaultValue: "philipn-mypy-ini")
     }
     environment {
         FORGE_CERT = "/etc/pki/tls/private/client_crt_key.pem"

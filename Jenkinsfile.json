@@ -1,4 +1,5 @@
 {
+    "commontooling_branch": "philipn-mypy-ini",
     "docker": true,
     "stages": [
         "@setup",
